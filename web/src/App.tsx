@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Confetti } from "./Confetti";
-import { drawFor, type Draw } from "./draw";
+import { CYCLE_YEARS, drawFor, type Draw } from "./draw";
 import { revealMs, SHUFFLE_MS, TIMING } from "./flair";
 import { notes } from "./households";
 import { useReducedMotion } from "./motion";
@@ -178,11 +178,11 @@ export function App({ search, now }: AppProps) {
 function Pairings({ draw, phase }: { draw: Draw; phase: Phase }) {
   return (
     <section aria-labelledby="pairings-heading">
-      <h2 id="pairings-heading" className="kind">
-        {draw.kind === "swap" ? "Swap year" : "Loop"}
+      <h2 id="pairings-heading" className="draw-heading">
+        Who gives to whom
         <span className="cycle">
           {" "}
-          · Cycle {draw.cycle}, year {draw.position} of 3
+          · Cycle {draw.cycle}, year {draw.position} of {CYCLE_YEARS}
         </span>
       </h2>
       <div className="stage">

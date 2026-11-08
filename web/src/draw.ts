@@ -1,13 +1,16 @@
 /**
  * The Draw module: a pure function from year to Draw. No DOM, clock or outside randomness.
  *
- * FROZEN once 2026 is live: the PRNG, seed derivation and schedule below decide every past and
- * future Draw. Changing any of them rewrites Draws people rely on; the pinned tests catch it.
+ * FROZEN once a Draw is in use: the PRNG, seed derivation and schedule below decide every past
+ * and future Draw. Changing any of them rewrites Draws people rely on; the pinned tests catch it.
  *
- * Schedule (see ADR 0001): from each Household List's start year, years group into three-year
- * Cycles. Per Cycle a seeded shuffle picks an order of the four Households around a circle and
- * an order of the offsets 1, 2, 3. In the Cycle's k-th year each Giver gives to the Household
- * that many places ahead. Offsets 1 and 3 are Loops, offset 2 is the Swap year.
+ * Schedule (see ADR 0001): every Draw is a Loop, so no two Households ever give to each other.
+ * From each Household List's start year, years group into six-year Cycles that use each of the
+ * six possible Loops once, in the fixed order of CYCLE_LOOPS. Over a Cycle every Giver gives to
+ * each other Household twice. With four Households a Loop-only schedule can't avoid every
+ * back-to-back repeat; this order has the minimum (three per Cycle, each on a different Giver)
+ * and none across the boundary into the next Cycle. A seeded shuffle per Cycle decides which
+ * Household sits in which slot, so who gets which year changes from Cycle to Cycle.
  */
 import { householdLists as configuredLists, type Household, type HouseholdList } from "./households";
 
@@ -16,44 +19,56 @@ export interface Pairing {
   readonly recipient: Household;
 }
 
-export type DrawKind = "loop" | "swap";
-
 export interface Draw {
   readonly year: number;
-  readonly kind: DrawKind;
   /** 1-based Cycle number counted from the Household List's start year. */
   readonly cycle: number;
-  /** 1, 2 or 3: the year's place in its Cycle. */
-  readonly position: 1 | 2 | 3;
+  /** 1 to 6: the year's place in its Cycle. */
+  readonly position: CyclePosition;
   /** Start year of the Household List this Draw was made with. */
   readonly listStartYear: number;
   /** One Pairing per Giver, in the Household List's order. */
   readonly pairings: readonly Pairing[];
 }
 
+export type CyclePosition = 1 | 2 | 3 | 4 | 5 | 6;
+
 export interface Draws {
   drawFor(year: number): Draw | undefined;
 }
 
-const CYCLE_YEARS = 3;
-const OFFSETS = [1, 2, 3] as const;
+/**
+ * The six Loops in Cycle order, over abstract slots 0-3: entry [s] is the slot that slot s gives
+ * to. Chosen by brute force over all orders: no mutual Pairings, the fewest back-to-back repeats
+ * (years 1-2 slot 2, 3-4 slot 1, 5-6 slot 0) and none from year 6 into the next year 1. Frozen.
+ */
+const CYCLE_LOOPS: readonly (readonly number[])[] = [
+  [1, 2, 3, 0],
+  [2, 0, 3, 1],
+  [1, 3, 0, 2],
+  [2, 3, 1, 0],
+  [3, 2, 0, 1],
+  [3, 0, 1, 2],
+];
+export const CYCLE_YEARS = CYCLE_LOOPS.length;
 const MAX_SEED_ATTEMPTS = 1000;
 
 /** Builds a drawFor over a given Household List config (the app uses the shipped config). */
 export function createDraws(lists: readonly HouseholdList[]): Draws {
-  /** Per (list index, Cycle index): circle order of Household indexes and offset order. */
-  const cycles = new Map<string, { circle: number[]; offsets: number[] }>();
+  /** Per (list index, Cycle index): the Household index (into the list) sitting in each slot. */
+  const cycles = new Map<string, number[]>();
 
   function listIndexFor(year: number): number {
     for (let i = lists.length - 1; i >= 0; i--) if (lists[i].startYear <= year) return i;
     return -1;
   }
 
-  /** Recipient index (into the list) for each Giver index, for a year in a known Cycle. */
-  function recipientsFor(circle: number[], offset: number): number[] {
-    const recipientOf = new Array<number>(circle.length);
-    circle.forEach((giver, place) => {
-      recipientOf[giver] = circle[(place + offset) % circle.length];
+  /** Recipient index (into the list) for each Giver index, for one year of a Cycle. */
+  function recipientsFor(slots: number[], indexInCycle: number): number[] {
+    const loop = CYCLE_LOOPS[indexInCycle];
+    const recipientOf = new Array<number>(slots.length);
+    slots.forEach((giver, slot) => {
+      recipientOf[giver] = slots[loop[slot]];
     });
     return recipientOf;
   }
@@ -87,17 +102,15 @@ export function createDraws(lists: readonly HouseholdList[]): Draws {
     return cycles.get(keyOf(listIndex, cycleIndex))!;
   }
 
-  /** Picks one Cycle's circle and offsets; the Cycle before it must already be cached. */
+  /** Picks one Cycle's slot order; the Cycle before it must already be cached. */
   function computeCycle(listIndex: number, cycleIndex: number) {
     const list = lists[listIndex];
     const firstYear = list.startYear + cycleIndex * CYCLE_YEARS;
     const previous = draw(firstYear - 1);
     for (let attempt = 0; attempt < MAX_SEED_ATTEMPTS; attempt++) {
-      const rand = mulberry32(seedFor(list.startYear, cycleIndex, attempt));
-      const circle = shuffle([0, 1, 2, 3], rand);
-      const offsets = shuffle([...OFFSETS], rand);
-      if (previous && repeatsAny(previous, list, recipientsFor(circle, offsets[0]))) continue;
-      return { circle, offsets };
+      const slots = shuffle([0, 1, 2, 3], mulberry32(seedFor(list.startYear, cycleIndex, attempt)));
+      if (previous && repeatsAny(previous, list, recipientsFor(slots, 0))) continue;
+      return slots;
     }
     throw new Error(`no seed attempt avoids a repeat for Cycle ${cycleIndex + 1} of the ${list.startYear} list`);
   }
@@ -108,14 +121,11 @@ export function createDraws(lists: readonly HouseholdList[]): Draws {
     if (!place) return undefined;
     const { listIndex, cycleIndex, indexInCycle } = place;
     const list = lists[listIndex];
-    const { circle, offsets } = cycleFor(listIndex, cycleIndex);
-    const offset = offsets[indexInCycle];
-    const recipients = recipientsFor(circle, offset);
+    const recipients = recipientsFor(cycleFor(listIndex, cycleIndex), indexInCycle);
     return {
       year,
-      kind: offset === 2 ? "swap" : "loop",
       cycle: cycleIndex + 1,
-      position: (indexInCycle + 1) as 1 | 2 | 3,
+      position: (indexInCycle + 1) as CyclePosition,
       listStartYear: list.startYear,
       pairings: list.households.map((giver, i) => ({ giver, recipient: list.households[recipients[i]] })),
     };
@@ -132,7 +142,7 @@ function repeatsAny(previous: Draw, list: HouseholdList, recipients: number[]): 
 
 /** FNV-1a over the seed parts. Frozen. */
 function seedFor(listStartYear: number, cycleIndex: number, attempt: number): number {
-  const text = `christmas-swap:${listStartYear}:${cycleIndex}:${attempt}`;
+  const text = `christmas-swap-loops:${listStartYear}:${cycleIndex}:${attempt}`;
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);
