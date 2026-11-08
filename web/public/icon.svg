@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#14532d"/>
+  <!-- Placeholder: a gift box with a ribbon and bow; the PNG icons are rendered from this file -->
+  <rect x="116" y="216" width="280" height="200" rx="16" fill="#dc2626"/>
+  <rect x="100" y="176" width="312" height="64" rx="14" fill="#ef4444"/>
+  <rect x="236" y="176" width="40" height="240" fill="#facc15"/>
+  <path d="M256 176c-30-56-96-64-96-24s66 24 96 24zM256 176c30-56 96-64 96-24s-66 24-96 24z" fill="none" stroke="#facc15" stroke-width="18" stroke-linejoin="round"/>
+</svg>

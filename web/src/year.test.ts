@@ -1,0 +1,52 @@
+import { describe, expect, it } from "vitest";
+import { canonicalSearch, currentYear, yearToShow } from "./year";
+
+const nov2026 = new Date(2026, 10, 8);
+
+describe("yearToShow", () => {
+  it("shows the calendar year when the URL has no year", () => {
+    expect(yearToShow("", nov2026)).toBe(2026);
+  });
+
+  it("shows the year from ?year= when it is valid", () => {
+    expect(yearToShow("?year=2030", nov2026)).toBe(2030);
+    expect(yearToShow("?other=1&year=2027", nov2026)).toBe(2027);
+  });
+
+  it("ignores a ?year= that isn't a plain whole year", () => {
+    for (const bad of ["?year=", "?year=abc", "?year=2027.5", "?year=1e4", "?year=%202027", "?year=-2027", "?year=0x7eb", "?year=99999"]) {
+      expect(yearToShow(bad, nov2026), bad).toBe(2026);
+    }
+  });
+
+  it("never goes before 2026, the first year with a Draw", () => {
+    expect(yearToShow("?year=2025", nov2026)).toBe(2026);
+    expect(yearToShow("?year=1999", new Date(2028, 0, 1))).toBe(2026);
+    expect(yearToShow("", new Date(2025, 11, 31))).toBe(2026);
+  });
+
+  it("follows the calendar year in later years", () => {
+    expect(yearToShow("", new Date(2027, 0, 1))).toBe(2027);
+  });
+});
+
+describe("currentYear", () => {
+  it("returns the calendar year, flipping at midnight Jan 1", () => {
+    expect(currentYear(new Date(2026, 11, 31, 23, 59, 59))).toBe(2026);
+    expect(currentYear(new Date(2027, 0, 1, 0, 0, 0))).toBe(2027);
+  });
+});
+
+describe("canonicalSearch", () => {
+  it("rewrites a clamped or invalid ?year= to the year actually shown", () => {
+    expect(canonicalSearch("?year=2025", 2026)).toBe("?year=2026");
+    expect(canonicalSearch("?year=abc", 2026)).toBe("?year=2026");
+    expect(canonicalSearch("?other=1&year=1999", 2026)).toBe("?other=1&year=2026");
+  });
+
+  it("leaves the URL alone when ?year= already matches or is absent", () => {
+    expect(canonicalSearch("?year=2030", 2030)).toBeUndefined();
+    expect(canonicalSearch("", 2026)).toBeUndefined();
+    expect(canonicalSearch("?other=1", 2026)).toBeUndefined();
+  });
+});

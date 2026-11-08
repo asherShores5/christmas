@@ -1,0 +1,71 @@
+name: CI / Deploy
+
+# Tests on every push to main or prod and on PRs; pushes to prod also deploy (GitHub OIDC, no keys).
+# Setup (names only, values live in GitHub settings): see docs/first-deploy.md.
+#   secret   AWS_ACCOUNT_ID    masked in the public logs; the deploy role ARN is built from it
+#   variable HOSTED_ZONE_ID    the existing Route 53 zone
+#   variable HOSTED_ZONE_NAME  that zone's name
+#   variable AWS_REGION        optional, defaults to us-west-1
+
+on:
+  push:
+    branches: [main, prod]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/prod' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test -w web
+      - run: npm run typecheck -w web
+      - run: npm run build:web
+
+  infra-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test -w infra
+      - run: npm run typecheck -w infra
+      # Builds web, then synths with no hosting config (no AWS access needed).
+      - run: npm run synth
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/prod'
+    needs: [test, infra-test]
+    runs-on: ubuntu-latest
+    # Waits for Asher's approval in GitHub; the AWS role trusts only this environment.
+    environment: production
+    permissions:
+      id-token: write # OIDC -> AWS
+      contents: read
+    env:
+      # Read by infra/lib/config.ts. requireHosting (set by `npm run deploy -w infra`) fails the
+      # deploy if a value is missing instead of quietly deploying without the domain.
+      HOSTED_ZONE_ID: ${{ vars.HOSTED_ZONE_ID }}
+      HOSTED_ZONE_NAME: ${{ vars.HOSTED_ZONE_NAME }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run build:web
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/christmas-github-deploy
+          aws-region: ${{ vars.AWS_REGION || 'us-west-1' }}
+          mask-aws-account-id: true
+      - run: npm run deploy -w infra

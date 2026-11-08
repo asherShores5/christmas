@@ -10,3 +10,8 @@ in back-to-back years (at best 3 times per 6 years). Both were checked by brute 
 I chose a three-year Cycle: two Loops and one Swap year. Everyone gives to everyone every three
 years and no one repeats a Recipient back to back. The cost is one year in three of two mutual
 swaps. The rejected option was a six-year Cycle of all six Loops (never mutual, but repeats).
+
+Consequence: there are only three ways to group four Households around a circle, and under the
+no-repeat rule the grouping can only change between two consecutive Swap years. So consecutive
+Cycles often reuse a grouping (2029-2031 reshuffle 2026-2028). Forcing rotation was rejected: it
+needs back-to-back Swap years and long alternating stretches, which feel less random.
