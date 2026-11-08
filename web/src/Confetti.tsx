@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { fitToWindow } from "./canvas";
 
 const COLORS = ["#d62828", "#2a9d5c", "#f4c430", "#ffffff", "#e76f51", "#4ea8de"];
 const DURATION = 3.2;
@@ -26,12 +27,7 @@ export function Confetti({ burst }: { burst: number }) {
     const ctx = canvas?.getContext("2d");
     if (!burst || !canvas || !ctx) return;
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const { w, h } = fitToWindow(canvas, ctx);
 
     // Two cannons low on either side of the content column, aimed up and in.
     const spread = Math.min(w * 0.42, 340);

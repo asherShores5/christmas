@@ -51,17 +51,44 @@ export function createDraws(lists: readonly HouseholdList[]): Draws {
 
   /** Recipient index (into the list) for each Giver index, for a year in a known Cycle. */
   function recipientsFor(circle: number[], offset: number): number[] {
-    const out = new Array<number>(circle.length);
+    const recipientOf = new Array<number>(circle.length);
     circle.forEach((giver, place) => {
-      out[giver] = circle[(place + offset) % circle.length];
+      recipientOf[giver] = circle[(place + offset) % circle.length];
     });
-    return out;
+    return recipientOf;
   }
 
+  /** Where a year falls: its Household List, Cycle and 0-based position in that Cycle. */
+  function placeOf(year: number) {
+    const listIndex = listIndexFor(year);
+    if (listIndex < 0) return undefined;
+    const sinceStart = year - lists[listIndex].startYear;
+    return { listIndex, cycleIndex: Math.floor(sinceStart / CYCLE_YEARS), indexInCycle: sinceStart % CYCLE_YEARS };
+  }
+
+  const keyOf = (listIndex: number, cycleIndex: number) => `${listIndex}:${cycleIndex}`;
+
+  /**
+   * A Cycle depends on the Draw just before it, which lives in an earlier Cycle. Walk back to the
+   * first Cycle not yet cached, then fill forward, so far-off years don't recurse.
+   */
   function cycleFor(listIndex: number, cycleIndex: number) {
-    const key = `${listIndex}:${cycleIndex}`;
-    const cached = cycles.get(key);
-    if (cached) return cached;
+    const pending = [{ listIndex, cycleIndex }];
+    for (;;) {
+      const { listIndex: l, cycleIndex: c } = pending[pending.length - 1];
+      const before = placeOf(lists[l].startYear + c * CYCLE_YEARS - 1);
+      if (!before || cycles.has(keyOf(before.listIndex, before.cycleIndex))) break;
+      pending.push({ listIndex: before.listIndex, cycleIndex: before.cycleIndex });
+    }
+    for (let i = pending.length - 1; i >= 0; i--) {
+      const { listIndex: l, cycleIndex: c } = pending[i];
+      if (!cycles.has(keyOf(l, c))) cycles.set(keyOf(l, c), computeCycle(l, c));
+    }
+    return cycles.get(keyOf(listIndex, cycleIndex))!;
+  }
+
+  /** Picks one Cycle's circle and offsets; the Cycle before it must already be cached. */
+  function computeCycle(listIndex: number, cycleIndex: number) {
     const list = lists[listIndex];
     const firstYear = list.startYear + cycleIndex * CYCLE_YEARS;
     const previous = draw(firstYear - 1);
@@ -70,29 +97,25 @@ export function createDraws(lists: readonly HouseholdList[]): Draws {
       const circle = shuffle([0, 1, 2, 3], rand);
       const offsets = shuffle([...OFFSETS], rand);
       if (previous && repeatsAny(previous, list, recipientsFor(circle, offsets[0]))) continue;
-      const result = { circle, offsets };
-      cycles.set(key, result);
-      return result;
+      return { circle, offsets };
     }
     throw new Error(`no seed attempt avoids a repeat for Cycle ${cycleIndex + 1} of the ${list.startYear} list`);
   }
 
   function draw(year: number): Draw | undefined {
     if (!Number.isInteger(year)) return undefined;
-    const listIndex = listIndexFor(year);
-    if (listIndex < 0) return undefined;
+    const place = placeOf(year);
+    if (!place) return undefined;
+    const { listIndex, cycleIndex, indexInCycle } = place;
     const list = lists[listIndex];
-    const sinceStart = year - list.startYear;
-    const cycleIndex = Math.floor(sinceStart / CYCLE_YEARS);
-    const k = sinceStart % CYCLE_YEARS;
     const { circle, offsets } = cycleFor(listIndex, cycleIndex);
-    const offset = offsets[k];
+    const offset = offsets[indexInCycle];
     const recipients = recipientsFor(circle, offset);
     return {
       year,
       kind: offset === 2 ? "swap" : "loop",
       cycle: cycleIndex + 1,
-      position: (k + 1) as 1 | 2 | 3,
+      position: (indexInCycle + 1) as 1 | 2 | 3,
       listStartYear: list.startYear,
       pairings: list.households.map((giver, i) => ({ giver, recipient: list.households[recipients[i]] })),
     };
@@ -146,7 +169,3 @@ export function drawFor(year: number): Draw | undefined {
   return shipped.drawFor(year);
 }
 
-/** The calendar year the page shows by default (local time; flips at midnight Jan 1). */
-export function currentYear(now: Date): number {
-  return now.getFullYear();
-}

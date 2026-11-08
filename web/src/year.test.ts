@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { yearToShow } from "./year";
+import { canonicalSearch, currentYear, yearToShow } from "./year";
 
 const nov2026 = new Date(2026, 10, 8);
 
@@ -27,5 +27,26 @@ describe("yearToShow", () => {
 
   it("follows the calendar year in later years", () => {
     expect(yearToShow("", new Date(2027, 0, 1))).toBe(2027);
+  });
+});
+
+describe("currentYear", () => {
+  it("returns the calendar year, flipping at midnight Jan 1", () => {
+    expect(currentYear(new Date(2026, 11, 31, 23, 59, 59))).toBe(2026);
+    expect(currentYear(new Date(2027, 0, 1, 0, 0, 0))).toBe(2027);
+  });
+});
+
+describe("canonicalSearch", () => {
+  it("rewrites a clamped or invalid ?year= to the year actually shown", () => {
+    expect(canonicalSearch("?year=2025", 2026)).toBe("?year=2026");
+    expect(canonicalSearch("?year=abc", 2026)).toBe("?year=2026");
+    expect(canonicalSearch("?other=1&year=1999", 2026)).toBe("?other=1&year=2026");
+  });
+
+  it("leaves the URL alone when ?year= already matches or is absent", () => {
+    expect(canonicalSearch("?year=2030", 2030)).toBeUndefined();
+    expect(canonicalSearch("", 2026)).toBeUndefined();
+    expect(canonicalSearch("?other=1", 2026)).toBeUndefined();
   });
 });
