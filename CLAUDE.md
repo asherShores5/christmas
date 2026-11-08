@@ -28,4 +28,4 @@ Single context: `GLOSSARY.md` and `docs/adr/` at the repo root. Specs live in `d
   backend). Reuse its patterns before inventing new ones.
 - Pin `AWS_REGION=us-west-1` for cdk diff/deploy (the dev desktop defaults to us-west-2).
 - The Draw algorithm is frozen once 2026 is live: any change to the shuffle, seed or schedule
-  can rewrite past and current Draws. Tests pin known years; never update those pins casually.
+  can rewrite past and current Draws (it was changed once, 2026-11-08, before anyone used it). Tests pin known years; never update those pins casually.

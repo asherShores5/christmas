@@ -14,15 +14,13 @@ version starts a new Cycle that year; earlier years keep the list they were draw
 
 **Pairing**: One Giver → Recipient link.
 
-**Draw**: One year's four Pairings. A Draw is either a Loop or a Swap year.
+**Draw**: One year's four Pairings. Every Draw is a Loop.
 
 **Loop**: A Draw where following Giver → Recipient visits all four Households before returning
-to the start (A → B → C → D → A).
+to the start (A → B → C → D → A). So two Households never give to each other in the same year.
 
-**Swap year**: A Draw made of two mutual Pairings (A ↔ B and C ↔ D).
-
-**Cycle**: Three consecutive years in which every Giver gives to each other Household exactly
-once: two Loops and one Swap year. No Giver has the same Recipient two years in a row, within a
-Cycle or across Cycles.
+**Cycle**: Six consecutive years that use each of the six possible Loops once. Over a Cycle every
+Giver gives to each other Household exactly twice. Three times per Cycle one Giver (a different
+one each time) has the same Recipient as the year before; never across Cycles.
 
 **Notes**: Optional text for a year (gift budget, exchange date, rules) shown with its Draw.

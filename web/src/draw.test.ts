@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDraws, drawFor, type Draw } from "./draw";
+import { createDraws, CYCLE_YEARS, drawFor, type Draw } from "./draw";
 import { householdLists } from "./households";
 
 const FIRST_YEAR = 2026;
@@ -38,34 +38,46 @@ describe("drawFor", () => {
 });
 
 describe("Cycles", () => {
-  it("every Draw is a Loop or a Swap year, and each full Cycle has two Loops and one Swap year", () => {
-    for (let start = FIRST_YEAR; start + 2 <= LAST_TESTED_YEAR; start += 3) {
-      const cycle = [start, start + 1, start + 2].map(mustDraw);
-      expect(cycle.map((d) => d.position)).toEqual([1, 2, 3]);
+  const fullCycles = (from: number) =>
+    Array.from({ length: Math.floor((LAST_TESTED_YEAR - from + 1) / CYCLE_YEARS) }, (_, i) => from + i * CYCLE_YEARS);
+  const cycleYears = (start: number) => Array.from({ length: CYCLE_YEARS }, (_, i) => start + i);
+
+  it("every Draw is a Loop: no two Households ever give to each other", () => {
+    for (const year of years) expect(isLoop(mustDraw(year)), `${year}`).toBe(true);
+  });
+
+  it("each full Cycle is six years, numbered 1 to 6", () => {
+    for (const start of fullCycles(FIRST_YEAR)) {
+      const cycle = cycleYears(start).map(mustDraw);
+      expect(cycle.map((d) => d.position)).toEqual([1, 2, 3, 4, 5, 6]);
       expect(new Set(cycle.map((d) => d.cycle)).size).toBe(1);
-      for (const d of cycle) {
-        expect(isLoop(d) ? "loop" : isSwap(d) ? "swap" : "neither", `${d.year}`).toBe(d.kind);
-      }
-      expect(cycle.filter((d) => d.kind === "loop")).toHaveLength(2);
-      expect(cycle.filter((d) => d.kind === "swap")).toHaveLength(1);
     }
   });
 
-  it("within each full Cycle, each Giver gives to each other Household exactly once", () => {
-    for (let start = FIRST_YEAR; start + 2 <= LAST_TESTED_YEAR; start += 3) {
+  it("within each full Cycle, each Giver gives to each other Household exactly twice", () => {
+    for (const start of fullCycles(FIRST_YEAR)) {
       const given = new Map<string, string[]>();
-      for (const d of [start, start + 1, start + 2].map(mustDraw)) {
+      for (const d of cycleYears(start).map(mustDraw)) {
         for (const p of d.pairings) given.set(p.giver.id, [...(given.get(p.giver.id) ?? []), p.recipient.id]);
       }
       for (const [giver, recipients] of given) {
-        expect(new Set(recipients).size, `${start} ${giver}`).toBe(3);
+        const counts = new Map<string, number>();
+        for (const r of recipients) counts.set(r, (counts.get(r) ?? 0) + 1);
+        expect([...counts.values()], `${start} ${giver}`).toEqual([2, 2, 2]);
         expect(recipients).not.toContain(giver);
       }
     }
   });
 
-  it("no Giver has the same Recipient two years running, including across Cycle boundaries", () => {
-    expect(consecutiveRepeats(drawFor, FIRST_YEAR, LAST_TESTED_YEAR)).toEqual([]);
+  it("back-to-back repeats: exactly three per Cycle, on three different Givers, none across Cycle boundaries", () => {
+    const repeats = consecutiveRepeats(drawFor, FIRST_YEAR, LAST_TESTED_YEAR);
+    for (const start of fullCycles(FIRST_YEAR)) {
+      const inCycle = repeats.filter((r) => r.year > start && r.year < start + CYCLE_YEARS);
+      expect(inCycle.map((r) => r.year - start + 1), `${start}`).toEqual([2, 4, 6]);
+      expect(new Set(inCycle.map((r) => r.giver)).size, `${start}`).toBe(3);
+    }
+    const boundaries = repeats.filter((r) => (r.year - FIRST_YEAR) % CYCLE_YEARS === 0);
+    expect(boundaries).toEqual([]);
   });
 
   it("the same year always gives the same Draw, from a fresh instance or the shared one", () => {
@@ -77,20 +89,19 @@ describe("Cycles", () => {
 });
 
 describe("pinned Draws (frozen: never update these casually, see CLAUDE.md)", () => {
-  // Generated once from the finished implementation on 2026-11-08, then hardcoded.
-  const pinned: Record<number, [kind: string, cyclePosition: string, pairings: string]> = {
-    2026: ["swap", "1/1", "eliana>shores shores>eliana janz>wruks wruks>janz"],
-    2027: ["loop", "1/2", "eliana>janz shores>wruks janz>shores wruks>eliana"],
-    2028: ["loop", "1/3", "eliana>wruks shores>janz janz>eliana wruks>shores"],
-    2029: ["swap", "2/1", "eliana>shores shores>eliana janz>wruks wruks>janz"],
-    2030: ["loop", "2/2", "eliana>wruks shores>janz janz>eliana wruks>shores"],
-    2031: ["loop", "2/3", "eliana>janz shores>wruks janz>shores wruks>eliana"],
+  // Generated once from the Loop-only schedule on 2026-11-08, then hardcoded.
+  const pinned: Record<number, [cyclePosition: string, pairings: string]> = {
+    2026: ["1/1", "eliana>shores shores>janz janz>wruks wruks>eliana"],
+    2027: ["1/2", "eliana>janz shores>wruks janz>shores wruks>eliana"],
+    2028: ["1/3", "eliana>wruks shores>janz janz>eliana wruks>shores"],
+    2029: ["1/4", "eliana>shores shores>wruks janz>eliana wruks>janz"],
+    2030: ["1/5", "eliana>janz shores>eliana janz>wruks wruks>shores"],
+    2031: ["1/6", "eliana>wruks shores>eliana janz>shores wruks>janz"],
   };
 
-  for (const [year, [kind, cyclePosition, pairings]] of Object.entries(pinned)) {
+  for (const [year, [cyclePosition, pairings]] of Object.entries(pinned)) {
     it(`${year}`, () => {
       const d = mustDraw(Number(year));
-      expect(d.kind).toBe(kind);
       expect(`${d.cycle}/${d.position}`).toBe(cyclePosition);
       expect(d.pairings.map((p) => `${p.giver.id}>${p.recipient.id}`).join(" ")).toBe(pairings);
     });
@@ -99,15 +110,15 @@ describe("pinned Draws (frozen: never update these casually, see CLAUDE.md)", ()
   it("uses the configured labels", () => {
     expect(mustDraw(2026).pairings.map((p) => `${p.giver.label} -> ${p.recipient.label}`)).toEqual([
       "Eliana -> The Shores",
-      "The Shores -> Eliana",
+      "The Shores -> The Janz",
       "The Janz -> The Wruks",
-      "The Wruks -> The Janz",
+      "The Wruks -> Eliana",
     ]);
   });
 });
 
 describe("Household List change", () => {
-  // Change year 2034 cuts the 2032-2034 Cycle short, the harder case for the boundary rule.
+  // Change year 2034 cuts the 2032-2037 Cycle short, the harder case for the boundary rule.
   const CHANGE_YEAR = 2034;
   const [eliana, shores, janz] = householdLists[0].households;
   const fixtures = {
@@ -127,14 +138,11 @@ describe("Household List change", () => {
         const first = changed.drawFor(CHANGE_YEAR)!;
         expect(first).toMatchObject({ listStartYear: CHANGE_YEAR, cycle: 1, position: 1 });
         expect(first.pairings.map((p) => p.giver.id)).toEqual(households.map((h) => h.id));
-        for (let start = CHANGE_YEAR; start + 2 <= LAST_TESTED_YEAR; start += 3) {
-          const kinds = [start, start + 1, start + 2].map((y) => changed.drawFor(y)!.kind).sort();
-          expect(kinds, `${start}`).toEqual(["loop", "loop", "swap"]);
-        }
+        for (let y = CHANGE_YEAR; y <= LAST_TESTED_YEAR; y++) expect(isLoop(changed.drawFor(y)!), `${y}`).toBe(true);
       });
 
-      it("never repeats a Recipient two years running across the change", () => {
-        expect(consecutiveRepeats(changed.drawFor, FIRST_YEAR, LAST_TESTED_YEAR)).toEqual([]);
+      it("no Giver repeats a Recipient from the year before the change", () => {
+        expect(consecutiveRepeats(changed.drawFor, CHANGE_YEAR - 1, CHANGE_YEAR)).toEqual([]);
       });
     });
   }
@@ -153,17 +161,11 @@ function isLoop(d: Draw): boolean {
   return seen.size === 4 && at === start;
 }
 
-/** Two mutual Pairings. */
-function isSwap(d: Draw): boolean {
-  const next = new Map(d.pairings.map((p) => [p.giver.id, p.recipient.id]));
-  return d.pairings.every((p) => next.get(p.recipient.id) === p.giver.id);
-}
-
-function consecutiveRepeats(draw: (y: number) => Draw | undefined, from: number, to: number): string[] {
-  const out: string[] = [];
+function consecutiveRepeats(draw: (y: number) => Draw | undefined, from: number, to: number) {
+  const out: { year: number; giver: string; recipient: string }[] = [];
   for (let y = from + 1; y <= to; y++) {
     const before = new Map(draw(y - 1)!.pairings.map((p) => [p.giver.id, p.recipient.id]));
-    for (const p of draw(y)!.pairings) if (before.get(p.giver.id) === p.recipient.id) out.push(`${y}: ${p.giver.id} -> ${p.recipient.id}`);
+    for (const p of draw(y)!.pairings) if (before.get(p.giver.id) === p.recipient.id) out.push({ year: y, giver: p.giver.id, recipient: p.recipient.id });
   }
   return out;
 }
