@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDraws, currentYear, drawFor, type Draw } from "./draw";
+import { createDraws, drawFor, type Draw } from "./draw";
 import { householdLists } from "./households";
 
 const FIRST_YEAR = 2026;
@@ -13,6 +13,12 @@ function mustDraw(year: number): Draw {
 }
 
 describe("drawFor", () => {
+  it("works for the last four-digit year on a cold cache", () => {
+    const d = createDraws(householdLists).drawFor(9999);
+    expect(d).toMatchObject({ year: 9999, listStartYear: 2026 });
+    expect(d!.pairings).toHaveLength(4);
+  });
+
   it("gives no Draw before 2026", () => {
     expect(drawFor(2025)).toBeUndefined();
     expect(drawFor(1990)).toBeUndefined();
@@ -62,9 +68,11 @@ describe("Cycles", () => {
     expect(consecutiveRepeats(drawFor, FIRST_YEAR, LAST_TESTED_YEAR)).toEqual([]);
   });
 
-  it("the same year always gives the same Draw", () => {
-    for (const year of years) expect(drawFor(year)).toEqual(drawFor(year));
-    expect(createDraws(householdLists).drawFor(2040)).toEqual(drawFor(2040));
+  it("the same year always gives the same Draw, from a fresh instance or the shared one", () => {
+    for (const year of years) {
+      expect(drawFor(year), `${year}`).toEqual(drawFor(year));
+      expect(createDraws(householdLists).drawFor(year), `${year} fresh`).toEqual(drawFor(year));
+    }
   });
 });
 
@@ -95,13 +103,6 @@ describe("pinned Draws (frozen: never update these casually, see CLAUDE.md)", ()
       "The Janz -> The Wruks",
       "The Wruks -> The Janz",
     ]);
-  });
-});
-
-describe("currentYear", () => {
-  it("returns the calendar year, flipping at midnight Jan 1", () => {
-    expect(currentYear(new Date(2026, 11, 31, 23, 59, 59))).toBe(2026);
-    expect(currentYear(new Date(2027, 0, 1, 0, 0, 0))).toBe(2027);
   });
 });
 

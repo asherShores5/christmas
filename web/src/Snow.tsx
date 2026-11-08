@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { fitToWindow } from "./canvas";
 
 interface Flake {
   x: number;
@@ -39,12 +40,7 @@ export function Snow() {
     };
 
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      w = window.innerWidth;
-      h = window.innerHeight;
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ({ w, h } = fitToWindow(canvas, ctx));
       const count = Math.min(140, Math.round((w * h) / 9000));
       flakes = flakes.slice(0, count);
       while (flakes.length < count) flakes.push(newFlake(Math.random() * h));

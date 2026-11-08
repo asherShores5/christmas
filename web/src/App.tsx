@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { Confetti } from "./Confetti";
-import { currentYear, drawFor, type Draw } from "./draw";
+import { drawFor, type Draw } from "./draw";
 import { revealMs, SHUFFLE_MS, TIMING } from "./flair";
 import { notes } from "./households";
 import { useReducedMotion } from "./motion";
 import { Shuffle } from "./Shuffle";
 import { Snow } from "./Snow";
 import { Jingle } from "./sound";
-import { FIRST_YEAR, yearToShow } from "./year";
+import { canonicalSearch, currentYear, FIRST_YEAR, LAST_YEAR, yearToShow } from "./year";
 
 interface AppProps {
   /** location.search at load. */
@@ -20,6 +20,13 @@ type Phase = "shuffle" | "reveal" | "still";
 
 const hrefFor = (year: number) => `?year=${year}`;
 
+/** Makes the address bar name the year shown, without adding a history entry. */
+function normalizeUrl(shown: number) {
+  const { pathname, search, hash } = window.location;
+  const fixed = canonicalSearch(search, shown);
+  if (fixed !== undefined) window.history.replaceState(window.history.state, "", `${pathname}${fixed}${hash}`);
+}
+
 /**
  * The year view. The flair (snow, shuffle, confetti, sound) is layered over a static page that
  * stands on its own: that static page is exactly what reduced-motion users get. All Draw logic
@@ -27,7 +34,7 @@ const hrefFor = (year: number) => `?year=${year}`;
  */
 export function App({ search, now }: AppProps) {
   const [year, setYear] = useState(() => yearToShow(search, now));
-  const thisYear = Math.max(FIRST_YEAR, currentYear(now));
+  const thisYear = Math.min(LAST_YEAR, Math.max(FIRST_YEAR, currentYear(now)));
   const reduced = useReducedMotion();
 
   // One run = shuffle -> rows -> confetti. A new year or "Shuffle again" starts a new run. The
@@ -49,24 +56,30 @@ export function App({ search, now }: AppProps) {
     document.title = `Christmas Swap ${year}`;
   }, [year]);
 
+  // An invalid or clamped ?year= is rewritten in place to the year shown, at load and on Back.
   useEffect(() => {
-    const onPop = () => setYear(yearToShow(window.location.search, new Date()));
+    normalizeUrl(year);
+    const onPop = () => {
+      const shown = yearToShow(window.location.search, new Date());
+      normalizeUrl(shown);
+      setYear(shown);
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const rows = draw?.pairings.length ?? 0;
+  const pairingCount = draw?.pairings.length ?? 0;
   useEffect(() => {
-    if (reduced || rows === 0) return;
+    if (reduced || pairingCount === 0) return;
     const timers = [
       window.setTimeout(() => setProgress({ key: runKey, phase: "reveal" }), SHUFFLE_MS),
       window.setTimeout(() => {
         setBurst((b) => b + 1);
         if (soundOnRef.current) jingle.current?.play();
-      }, SHUFFLE_MS + revealMs(rows)),
+      }, SHUFFLE_MS + revealMs(pairingCount)),
     ];
     return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [runKey, reduced, rows]);
+  }, [runKey, reduced, pairingCount]);
 
   /** Sound starts muted; the first tap creates the audio (browsers require a gesture). */
   const toggleSound = async () => {
@@ -82,7 +95,7 @@ export function App({ search, now }: AppProps) {
   };
 
   /** Same-page navigation: keep the URL in step without a reload. */
-  const go = (to: number) => (e: MouseEvent<HTMLAnchorElement>) => {
+  const navigateTo = (to: number) => (e: MouseEvent<HTMLAnchorElement>) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
     e.preventDefault();
     window.history.pushState(null, "", to === thisYear ? "/" : hrefFor(to));
@@ -91,6 +104,7 @@ export function App({ search, now }: AppProps) {
 
   const note = notes[year];
   const atFirst = year <= FIRST_YEAR;
+  const atLast = year >= LAST_YEAR;
 
   return (
     <>
@@ -118,20 +132,26 @@ export function App({ search, now }: AppProps) {
               ←
             </span>
           ) : (
-            <a className="arrow" href={hrefFor(year - 1)} onClick={go(year - 1)} aria-label={`Previous year, ${year - 1}`}>
+            <a className="arrow" href={hrefFor(year - 1)} onClick={navigateTo(year - 1)} aria-label={`Previous year, ${year - 1}`}>
               ←
             </a>
           )}
           {year !== thisYear ? (
-            <a className="this-year" href="/" onClick={go(thisYear)}>
+            <a className="this-year" href="/" onClick={navigateTo(thisYear)}>
               This year
             </a>
           ) : (
             <span className="this-year placeholder" aria-hidden="true">This year</span>
           )}
-          <a className="arrow" href={hrefFor(year + 1)} onClick={go(year + 1)} aria-label={`Next year, ${year + 1}`}>
-            →
-          </a>
+          {atLast ? (
+            <span className="arrow" aria-disabled="true" role="link" aria-label={`Next year (none after ${LAST_YEAR})`}>
+              →
+            </span>
+          ) : (
+            <a className="arrow" href={hrefFor(year + 1)} onClick={navigateTo(year + 1)} aria-label={`Next year, ${year + 1}`}>
+              →
+            </a>
+          )}
         </nav>
 
         {draw && <Pairings key={runKey} draw={draw} phase={phase} />}
@@ -159,7 +179,7 @@ function Pairings({ draw, phase }: { draw: Draw; phase: Phase }) {
   return (
     <section aria-labelledby="pairings-heading">
       <h2 id="pairings-heading" className="kind">
-        {draw.kind === "swap" ? "Swap year" : "Loop year"}
+        {draw.kind === "swap" ? "Swap year" : "Loop"}
         <span className="cycle">
           {" "}
           · Cycle {draw.cycle}, year {draw.position} of 3
