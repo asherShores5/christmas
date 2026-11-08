@@ -4,6 +4,10 @@ import { fileURLToPath } from "node:url";
 import { build, defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { precacheList, shellVersion, type BuildFile } from "./src/swShell";
+import { householdLists, validateHouseholdLists } from "./src/households";
+
+// A bad Household List config fails the build, not just the tests.
+validateHouseholdLists(householdLists);
 
 export default defineConfig({ plugins: [react(), serviceWorker()], build: { target: "es2022" } });
 
