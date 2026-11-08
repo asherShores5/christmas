@@ -1,0 +1,22 @@
+/* Placeholder styles. Light by default, dark follows the system. */
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bg: #fdf8f0;
+  --text: #1c1c1e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1a14;
+    --text: #f2f2f7;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) calc(2rem + env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+}
+h1 { font-size: 1.8rem; letter-spacing: -0.02em; margin: 0.5rem 0 1.5rem; text-align: center; }
