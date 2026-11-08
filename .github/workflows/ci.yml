@@ -1,0 +1,38 @@
+name: CI
+
+# Tests on every push to main or prod and on PRs. The prod release job comes with the hosting stacks.
+
+on:
+  push:
+    branches: [main, prod]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test -w web
+      - run: npm run typecheck -w web
+      - run: npm run build:web
+
+  infra-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test -w infra
+      - run: npm run typecheck -w infra
+      # `npm run synth` joins here once the app has stacks (cdk synth fails on an app with none).
