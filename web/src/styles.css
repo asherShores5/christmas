@@ -10,6 +10,7 @@
   --border: #e8e0d2;
   --accent: #b3261e;
   --green: #1f6b45;
+  --snow: rgba(126, 160, 196, 0.55);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -20,12 +21,15 @@
     --border: #2a3d31;
     --accent: #ff8a80;
     --green: #7fd6a4;
+    --snow: rgba(255, 255, 255, 0.75);
   }
 }
 
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
 main {
+  position: relative;
+  z-index: 1;
   max-width: 32rem;
   margin: 0 auto;
   padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) calc(2rem + env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
@@ -87,6 +91,92 @@ h2 { font-size: 1rem; margin: 0 0 0.75rem; }
 
 .notes { margin-top: 1.75rem; }
 .notes p { margin: 0; white-space: pre-line; line-height: 1.5; }
+
+/* Flair. None of this renders with prefers-reduced-motion (App leaves it out), and the
+   animation rules are guarded below as a second line of defense. */
+.snow, .confetti {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.snow { z-index: 0; }
+.confetti { z-index: 2; }
+
+.sound {
+  position: absolute;
+  top: max(1rem, env(safe-area-inset-top));
+  right: max(1rem, env(safe-area-inset-right));
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  cursor: pointer;
+}
+.sound[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.sound:focus-visible, .again button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1 { padding: 0 2.75rem; }
+
+.stage { position: relative; }
+.pairings.shuffle li { opacity: 0; }
+.deck {
+  --gap: 0.6rem;
+  position: absolute;
+  inset: 0;
+}
+.deck-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc((100% - var(--gap)) / 2);
+  height: calc((100% - var(--gap)) / 2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  border-radius: 0.9rem;
+  border: 2px solid var(--accent);
+  background: var(--card);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  font-weight: 600;
+  font-size: 1.05rem;
+  text-align: center;
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.5, 0, 0.3, 1.3);
+}
+.deck-card svg { color: var(--accent); }
+
+@keyframes row-in {
+  from { opacity: 0; transform: translateY(-0.75rem) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.pairings.reveal li { animation-name: row-in; animation-timing-function: ease-out; animation-fill-mode: both; }
+
+.again { text-align: center; margin: 1.25rem 0 0; }
+.again button {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--green);
+  background: var(--card);
+  color: var(--green);
+  cursor: pointer;
+}
+.again button:disabled { opacity: 0.45; cursor: default; }
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-card { transition: none; }
+  .pairings.reveal li { animation: none; }
+  .pairings.shuffle li { opacity: 1; }
+}
 
 .visually-hidden {
   position: absolute;
