@@ -8,6 +8,6 @@ void registerServiceWorker();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <App search={window.location.search} now={new Date()} />
   </StrictMode>,
 );
