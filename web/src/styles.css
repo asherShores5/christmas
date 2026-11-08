@@ -70,8 +70,8 @@ h1 .year { color: var(--accent); font-variant-numeric: tabular-nums; }
 .years .placeholder { visibility: hidden; }
 
 h2 { font-size: 1rem; margin: 0 0 0.75rem; }
-.kind { text-align: center; color: var(--muted); font-weight: 600; }
-.kind .cycle { font-weight: 400; }
+.draw-heading { text-align: center; color: var(--muted); font-weight: 600; }
+.draw-heading .cycle { font-weight: 400; }
 
 .pairings { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
 .pairings li {
